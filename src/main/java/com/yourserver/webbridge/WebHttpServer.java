@@ -89,7 +89,7 @@ public class WebHttpServer extends NanoHTTPD {
             }
         }
 
-        // Endpoint: /api/inventory (Web Inventory Read-Only View)
+        // Endpoint: /api/inventory (Hotbar Read-Only)
         if ("/api/inventory".equalsIgnoreCase(uri) && Method.GET.equals(method)) {
             String username = session.getParms().get("username");
             if (username != null) {
@@ -110,6 +110,32 @@ public class WebHttpServer extends NanoHTTPD {
                 }
             }
             Response res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"online\":false}");
+            addCorsHeaders(res);
+            return res;
+        }
+
+        // NEW Endpoint: /api/map (Real-Time Player Location Tracker)
+        if ("/api/map".equalsIgnoreCase(uri) && Method.GET.equals(method)) {
+            StringBuilder json = new StringBuilder("{\"players\":[");
+            Player[] onlinePlayers = Bukkit.getOnlinePlayers().toArray(new Player[0]);
+
+            for (int i = 0; i < onlinePlayers.length; i++) {
+                Player p = onlinePlayers[i];
+                json.append("{")
+                    .append("\"name\":\"").append(p.getName()).append("\",")
+                    .append("\"world\":\"").append(p.getWorld().getName()).append("\",")
+                    .append("\"x\":").append(Math.round(p.getLocation().getX())).append(",")
+                    .append("\"y\":").append(Math.round(p.getLocation().getY())).append(",")
+                    .append("\"z\":").append(Math.round(p.getLocation().getZ())).append(",")
+                    .append("\"yaw\":").append(Math.round(p.getLocation().getYaw())).append(",")
+                    .append("\"health\":").append(Math.round(p.getHealth())).append(",")
+                    .append("\"food\":").append(p.getFoodLevel())
+                    .append("}");
+                if (i < onlinePlayers.length - 1) json.append(",");
+            }
+            json.append("]}");
+
+            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", json.toString());
             addCorsHeaders(res);
             return res;
         }
