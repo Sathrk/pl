@@ -6,3 +6,6 @@ commands:
   web:
     description: Web Dashboard Auth Command
     usage: /web login
+  claim:
+    description: Claim pending Web Shop items
+    usage: /claim
