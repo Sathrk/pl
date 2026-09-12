@@ -1,0 +1,25 @@
+public class WebBridgeServer extends NanoHTTPD {
+
+    public WebBridgeServer(int port) throws IOException {
+        super(port);
+        start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+        System.out.println("Web Server running on port: " + port);
+    }
+
+    @Override
+    public Response serve(IHTTPSession session) {
+        String uri = session.getUri();
+        
+        // CORS Headers enable karein taaki InfinityFree web UI request bhej sake
+        Response res;
+        if (uri.equals("/api/status")) {
+            res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"online\"}");
+        } else {
+            res = newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found");
+        }
+        
+        res.addHeader("Access-Control-Allow-Origin", "*");
+        res.addHeader("Access-Control-Allow-Headers", "*");
+        return res;
+    }
+}
