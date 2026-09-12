@@ -1,88 +1,75 @@
-package com.yourserver.webbridge;
+package com.survival.webdashboard;
 
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.List;
 
 public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
 
-    private WebHttpServer webServer;
-    private final int PORT = 12935;
+    private PasscodeManager passcodeManager;
+    private ClaimManager claimManager;
+    private WebHttpServer httpServer;
 
     @Override
     public void onEnable() {
-        try {
-            webServer = new WebHttpServer(PORT);
-            getLogger().info("Web Bridge HTTP Server running on port: " + PORT);
-        } catch (Exception e) {
-            getLogger().severe("Could not start Web Bridge server on port " + PORT + ": " + e.getMessage());
-        }
+        this.passcodeManager = new PasscodeManager();
+        this.claimManager = new ClaimManager();
 
-        if (getCommand("web") != null) {
-            getCommand("web").setExecutor(this);
-        }
-        if (getCommand("claim") != null) {
-            getCommand("claim").setExecutor(this);
-        }
+        // Start HTTP API Server
+        this.httpServer = new WebHttpServer(this);
+        this.httpServer.start();
+
+        // Register Commands
+        if (this.getCommand("web") != null) this.getCommand("web").setExecutor(this);
+        if (this.getCommand("claim") != null) this.getCommand("claim").setExecutor(this);
+
+        getLogger().info("WebBridge Main Plugin successfully loaded!");
     }
 
     @Override
     public void onDisable() {
-        if (webServer != null) {
-            webServer.stop();
+        if (httpServer != null) {
+            httpServer.stop();
         }
+        getLogger().info("WebBridge Plugin disabled.");
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player)) {
-            sender.sendMessage("Is command ko sirf in-game player use kar sakta hai!");
+            sender.sendMessage("Sirf in-game players in commands ko execute kar sakte hain.");
             return true;
         }
 
         Player player = (Player) sender;
 
-        // Command: /web login
-        if (command.getName().equalsIgnoreCase("web") && args.length > 0 && args[0].equalsIgnoreCase("login")) {
-            String code = PasscodeManager.generateCode(player.getName());
-            player.sendMessage(ChatColor.GREEN + "[WebAuth] " + ChatColor.WHITE + "Aapka Web Login Passcode: " 
-                + ChatColor.YELLOW + ChatColor.BOLD + code);
-            player.sendMessage(ChatColor.GRAY + "Yeh code agle 10 minutes tak valid hai.");
-            return true;
+        if (command.getName().equalsIgnoreCase("web")) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
+                String code = passcodeManager.generatePasscode(player.getName());
+                player.sendMessage("§a[WebBridge] Your web login passcode is: §e§l" + code);
+                player.sendMessage("§7Enter this 6-digit passcode on the web dashboard to authenticate.");
+                return true;
+            } else {
+                player.sendMessage("§cUsage: /web login");
+                return true;
+            }
         }
 
-        // Command: /claim
         if (command.getName().equalsIgnoreCase("claim")) {
-            List<ClaimManager.ClaimItem> pendingClaims = ClaimManager.getClaims(player.getName());
-
-            if (pendingClaims.isEmpty()) {
-                player.sendMessage(ChatColor.RED + "[WebClaim] Aapke paas koi pending claim rewards nahi hain!");
-                return true;
+            boolean success = claimManager.processClaims(player);
+            if (success) {
+                player.sendMessage("§a[WebBridge] Items claimed successfully!");
+            } else {
+                player.sendMessage("§e[WebBridge] You have no pending web store claims.");
             }
-
-            if (player.getInventory().firstEmpty() == -1) {
-                player.sendMessage(ChatColor.RED + "[WebClaim] Aapki inventory full hai! Space khali karke dubara try karein.");
-                return true;
-            }
-
-            int claimedCount = 0;
-            for (ClaimManager.ClaimItem claim : pendingClaims) {
-                ItemStack stack = new ItemStack(claim.getMaterial(), claim.getAmount());
-                player.getInventory().addItem(stack);
-                claimedCount++;
-            }
-
-            ClaimManager.clearClaims(player.getName());
-            player.sendMessage(ChatColor.GREEN + "[WebClaim] Successfully claimed " + claimedCount + " item stack(s)!");
             return true;
         }
 
         return false;
     }
+
+    public PasscodeManager getPasscodeManager() { return passcodeManager; }
+    public ClaimManager getClaimManager() { return claimManager; }
 }
