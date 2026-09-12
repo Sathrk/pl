@@ -33,10 +33,10 @@ public class PasscodeManager {
 
         if (System.currentTimeMillis() > data.expiryTime) {
             codeStorage.remove(code);
-            return null; // Expired
+            return null;
         }
 
-        codeStorage.remove(code); // One-time use verification
+        codeStorage.remove(code);
         return data.username;
     }
 }
