@@ -25,6 +25,34 @@ public class WebDashboardPlugin extends JavaPlugin {
     private static final int PORT = 12935;
 
     @Override
+public void onEnable() {
+    startWebServer();
+    
+    // Command Register karein
+    if (this.getCommand("web") != null) {
+        this.getCommand("web").setExecutor(this);
+    }
+    
+    getLogger().info("WebDashboard API Plugin successfully enabled on port " + PORT);
+}
+
+@Override
+public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.command.Command command, String label, String[] args) {
+    if (command.getName().equalsIgnoreCase("web")) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
+            if (sender instanceof Player) {
+                Player player = (Player) sender;
+                player.sendMessage("§a[WebDashboard] Login successful! Welcome " + player.getName());
+            } else {
+                sender.sendMessage("Sirf in-game players is command ko run kar sakte hain.");
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+    @Override
     public void onEnable() {
         startWebServer();
         getLogger().info("WebDashboard API Plugin successfully enabled on port " + PORT);
