@@ -1,25 +1,31 @@
-public class WebBridgeServer extends NanoHTTPD {
+<dependencies>
+    <!-- Paper/Spigot API -->
+    <dependency>
+        <groupId>org.spigotmc</groupId>
+        <artifactId>spigot-api</artifactId>
+        <version>1.20.4-R0.1-SNAPSHOT</version>
+        <scope>provided</scope>
+    </dependency>
+    <!-- Embedded HTTP Web Server -->
+    <dependency>
+        <groupId>org.nanohttpd</groupId>
+        <artifactId>nanohttpd</artifactId>
+        <version>2.3.1</version>
+    </dependency>
+</dependencies>
 
-    public WebBridgeServer(int port) throws IOException {
-        super(port);
-        start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-        System.out.println("Web Server running on port: " + port);
-    }
-
-    @Override
-    public Response serve(IHTTPSession session) {
-        String uri = session.getUri();
-        
-        // CORS Headers enable karein taaki InfinityFree web UI request bhej sake
-        Response res;
-        if (uri.equals("/api/status")) {
-            res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"online\"}");
-        } else {
-            res = newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found");
-        }
-        
-        res.addHeader("Access-Control-Allow-Origin", "*");
-        res.addHeader("Access-Control-Allow-Headers", "*");
-        return res;
-    }
-}
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+                <execution>
+                    <phase>package</phase>
+                    <goals><goal>shade</goal></goals>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
