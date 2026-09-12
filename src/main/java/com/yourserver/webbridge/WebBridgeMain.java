@@ -5,7 +5,10 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.List;
 
 public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
 
@@ -23,6 +26,9 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
 
         if (getCommand("web") != null) {
             getCommand("web").setExecutor(this);
+        }
+        if (getCommand("claim") != null) {
+            getCommand("claim").setExecutor(this);
         }
     }
 
@@ -42,61 +48,41 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
 
         Player player = (Player) sender;
 
-        if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
+        // Command: /web login
+        if (command.getName().equalsIgnoreCase("web") && args.length > 0 && args[0].equalsIgnoreCase("login")) {
             String code = PasscodeManager.generateCode(player.getName());
-            player.sendMessage(ChatColor.GREEN + "[WebAuth] " + ChatColor.WHITE + "Aapka Web Dashboard Login Passcode: " 
+            player.sendMessage(ChatColor.GREEN + "[WebAuth] " + ChatColor.WHITE + "Aapka Web Login Passcode: " 
                 + ChatColor.YELLOW + ChatColor.BOLD + code);
             player.sendMessage(ChatColor.GRAY + "Yeh code agle 10 minutes tak valid hai.");
             return true;
         }
 
-        player.sendMessage(ChatColor.RED + "Usage: /web login");
-        return true;
-    }
-}
+        // Command: /claim
+        if (command.getName().equalsIgnoreCase("claim")) {
+            List<ClaimManager.ClaimItem> pendingClaims = ClaimManager.getClaims(player.getName());
 
+            if (pendingClaims.isEmpty()) {
+                player.sendMessage(ChatColor.RED + "[WebClaim] Aapke paas koi pending claim rewards nahi hain!");
+                return true;
+            }
 
-   @Override
-public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-    if (!(sender instanceof Player)) {
-        sender.sendMessage("Is command ko sirf in-game player use kar sakta hai!");
-        return true;
-    }
+            if (player.getInventory().firstEmpty() == -1) {
+                player.sendMessage(ChatColor.RED + "[WebClaim] Aapki inventory full hai! Space khali karke dubara try karein.");
+                return true;
+            }
 
-    Player player = (Player) sender;
+            int claimedCount = 0;
+            for (ClaimManager.ClaimItem claim : pendingClaims) {
+                ItemStack stack = new ItemStack(claim.getMaterial(), claim.getAmount());
+                player.getInventory().addItem(stack);
+                claimedCount++;
+            }
 
-    if (command.getName().equalsIgnoreCase("web") && args.length > 0 && args[0].equalsIgnoreCase("login")) {
-        String code = PasscodeManager.generateCode(player.getName());
-        player.sendMessage(ChatColor.GREEN + "[WebAuth] " + ChatColor.WHITE + "Aapka Web Login Passcode: " 
-            + ChatColor.YELLOW + ChatColor.BOLD + code);
-        return true;
-    }
-
-    if (command.getName().equalsIgnoreCase("claim")) {
-        List<ClaimManager.ClaimItem> pendingClaims = ClaimManager.getClaims(player.getName());
-
-        if (pendingClaims.isEmpty()) {
-            player.sendMessage(ChatColor.RED + "[WebClaim] Aapke paas koi pending claim rewards nahi hain!");
+            ClaimManager.clearClaims(player.getName());
+            player.sendMessage(ChatColor.GREEN + "[WebClaim] Successfully claimed " + claimedCount + " item stack(s)!");
             return true;
         }
 
-        // Inventory space check
-        if (player.getInventory().firstEmpty() == -1) {
-            player.sendMessage(ChatColor.RED + "[WebClaim] Aapki inventory full hai! Space khali karke dubara try karein.");
-            return true;
-        }
-
-        int claimedCount = 0;
-        for (ClaimManager.ClaimItem claim : pendingClaims) {
-            ItemStack stack = new ItemStack(claim.getMaterial(), claim.getAmount());
-            player.getInventory().addItem(stack);
-            claimedCount++;
-        }
-
-        ClaimManager.clearClaims(player.getName());
-        player.sendMessage(ChatColor.GREEN + "[WebClaim] Successfully claimed " + claimedCount + " item stack(s)!");
-        return true;
+        return false;
     }
-
-    return false;
 }
