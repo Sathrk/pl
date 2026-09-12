@@ -1,153 +1,228 @@
-package com.yourserver.webbridge;
+package com.survival.webdashboard;
 
-import fi.iki.elonen.NanoHTTPD;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import javax.imageio.ImageIO;
+import java.awt.Color; // Standard AWT Color (Import fix)
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
-public class WebHttpServer extends NanoHTTPD {
+public class WebHttpServer {
 
-    public WebHttpServer(int port) throws IOException {
-        super(port);
-        start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+    private final WebBridgeMain plugin;
+    private HttpServer httpServer;
+    private final int port = 12935;
+
+    public WebHttpServer(WebBridgeMain plugin) {
+        this.plugin = plugin;
     }
 
-    @Override
-    public Response serve(IHTTPSession session) {
-        Method method = session.getMethod();
-        String uri = session.getUri();
+    public void start() {
+        try {
+            httpServer = HttpServer.create(new InetSocketAddress(port), 0);
 
-        // CORS Pre-flight handler
-        if (Method.OPTIONS.equals(method)) {
-            Response res = newFixedLengthResponse(Response.Status.OK, "text/plain", "OK");
-            addCorsHeaders(res);
-            return res;
+            // API Routing
+            httpServer.createContext("/api/verify", new VerifyHandler());
+            httpServer.createContext("/api/inventory", new InventoryHandler());
+            httpServer.createContext("/api/add-claim", new AddClaimHandler());
+            httpServer.createContext("/api/map", new MapDataHandler());
+            httpServer.createContext("/api/map-image", new MapImageHandler());
+
+            httpServer.setExecutor(null);
+            httpServer.start();
+            plugin.getLogger().info("Web HTTP Server listening on port " + port);
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not start Web HTTP Server: " + e.getMessage());
         }
+    }
 
-        // Endpoint: /api/status
-        if ("/api/status".equalsIgnoreCase(uri)) {
-            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"status\":\"online\"}");
-            addCorsHeaders(res);
-            return res;
+    public void stop() {
+        if (httpServer != null) {
+            httpServer.stop(0);
         }
+    }
 
-        // Endpoint: /api/verify
-        if ("/api/verify".equalsIgnoreCase(uri) && Method.POST.equals(method)) {
-            try {
-                Map<String, String> files = new HashMap<>();
-                session.parseBody(files);
+    // --- 1. Passcode Verification Endpoint ---
+    private class VerifyHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
 
-                String postData = files.get("postData");
-                if (postData == null) {
-                    postData = session.getQueryParameterString();
-                }
+            String code = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8).trim();
+            String username = plugin.getPasscodeManager().verifyCode(code);
 
-                String code = postData != null ? postData.replaceAll("[^0-9]", "") : "";
-                String playerName = PasscodeManager.verifyCode(code);
-
-                Response res;
-                if (playerName != null) {
-                    res = newFixedLengthResponse(Response.Status.OK, "application/json", 
-                        "{\"success\":true, \"username\":\"" + playerName + "\"}");
-                } else {
-                    res = newFixedLengthResponse(Response.Status.UNAUTHORIZED, "application/json", 
-                        "{\"success\":false, \"message\":\"Invalid or expired passcode\"}");
-                }
-                addCorsHeaders(res);
-                return res;
-
-            } catch (Exception e) {
-                Response res = newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "application/json", 
-                    "{\"success\":false, \"message\":\"Server error\"}");
-                addCorsHeaders(res);
-                return res;
-            }
-        }
-
-        // Endpoint: /api/add-claim
-        if ("/api/add-claim".equalsIgnoreCase(uri) && Method.POST.equals(method)) {
-            try {
-                Map<String, String> params = session.getParms();
-                String targetUser = params.get("username");
-                String itemMaterial = params.get("item");
-                int count = Integer.parseInt(params.getOrDefault("amount", "1"));
-
-                if (targetUser != null && itemMaterial != null) {
-                    ClaimManager.addClaim(targetUser, itemMaterial, count);
-                    Response res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"success\":true}");
-                    addCorsHeaders(res);
-                    return res;
-                }
-            } catch (Exception e) {
-                Response res = newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", "{\"error\":\"Invalid Data\"}");
-                addCorsHeaders(res);
-                return res;
-            }
-        }
-
-        // Endpoint: /api/inventory (Hotbar Read-Only)
-        if ("/api/inventory".equalsIgnoreCase(uri) && Method.GET.equals(method)) {
-            String username = session.getParms().get("username");
             if (username != null) {
-                Player player = Bukkit.getPlayer(username);
-                if (player != null && player.isOnline()) {
-                    StringBuilder json = new StringBuilder("{\"online\":true, \"hotbar\":[");
-                    for (int i = 0; i < 9; i++) {
-                        ItemStack item = player.getInventory().getItem(i);
-                        String itemName = (item != null) ? item.getType().name() : "AIR";
-                        int amount = (item != null) ? item.getAmount() : 0;
-                        json.append("{\"slot\":").append(i).append(",\"item\":\"").append(itemName).append("\",\"amount\":").append(amount).append("}");
-                        if (i < 8) json.append(",");
-                    }
-                    json.append("]}");
-                    Response res = newFixedLengthResponse(Response.Status.OK, "application/json", json.toString());
-                    addCorsHeaders(res);
-                    return res;
-                }
+                sendJson(exchange, "{\"success\":true,\"username\":\"" + username + "\"}");
+            } else {
+                sendJson(exchange, "{\"success\":false,\"message\":\"Invalid or expired passcode\"}");
             }
-            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", "{\"online\":false}");
-            addCorsHeaders(res);
-            return res;
         }
+    }
 
-        // NEW Endpoint: /api/map (Real-Time Player Location Tracker)
-        if ("/api/map".equalsIgnoreCase(uri) && Method.GET.equals(method)) {
+    // --- 2. Live Player Inventory (Hotbar) Sync ---
+    private class InventoryHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
+
+            String query = exchange.getRequestURI().getQuery();
+            String username = getQueryParam(query, "username");
+
+            Player player = (username != null) ? Bukkit.getPlayerExact(username) : null;
+            if (player != null && player.isOnline()) {
+                StringBuilder json = new StringBuilder("{\"online\":true,\"hotbar\":[");
+                for (int i = 0; i < 9; i++) {
+                    ItemStack item = player.getInventory().getItem(i);
+                    String itemType = (item != null && item.getType() != org.bukkit.Material.AIR) ? item.getType().name() : "AIR";
+                    int amount = (item != null) ? item.getAmount() : 0;
+                    json.append("{\"slot\":").append(i).append(",\"item\":\"").append(itemType).append("\",\"amount\":").append(amount).append("}");
+                    if (i < 8) json.append(",");
+                }
+                json.append("]}");
+                sendJson(exchange, json.toString());
+            } else {
+                sendJson(exchange, "{\"online\":false}");
+            }
+        }
+    }
+
+    // --- 3. Web Store Item Queue Handler ---
+    private class AddClaimHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
+
+            String query = exchange.getRequestURI().getQuery();
+            String username = getQueryParam(query, "username");
+            String item = getQueryParam(query, "item");
+            int amount = Integer.parseInt(getQueryParam(query, "amount", "1"));
+
+            if (username != null && item != null) {
+                plugin.getClaimManager().addClaim(username, item, amount);
+                sendJson(exchange, "{\"success\":true}");
+            } else {
+                sendJson(exchange, "{\"success\":false,\"message\":\"Missing arguments\"}");
+            }
+        }
+    }
+
+    // --- 4. Radar Map Players Location Handler ---
+    private class MapDataHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
+
             StringBuilder json = new StringBuilder("{\"players\":[");
-            Player[] onlinePlayers = Bukkit.getOnlinePlayers().toArray(new Player[0]);
-
-            for (int i = 0; i < onlinePlayers.length; i++) {
-                Player p = onlinePlayers[i];
+            int count = 0;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (count > 0) json.append(",");
                 json.append("{")
                     .append("\"name\":\"").append(p.getName()).append("\",")
-                    .append("\"world\":\"").append(p.getWorld().getName()).append("\",")
-                    .append("\"x\":").append(Math.round(p.getLocation().getX())).append(",")
-                    .append("\"y\":").append(Math.round(p.getLocation().getY())).append(",")
-                    .append("\"z\":").append(Math.round(p.getLocation().getZ())).append(",")
-                    .append("\"yaw\":").append(Math.round(p.getLocation().getYaw())).append(",")
-                    .append("\"health\":").append(Math.round(p.getHealth())).append(",")
-                    .append("\"food\":").append(p.getFoodLevel())
+                    .append("\"x\":").append(p.getLocation().getBlockX()).append(",")
+                    .append("\"y\":").append(p.getLocation().getBlockY()).append(",")
+                    .append("\"z\":").append(p.getLocation().getBlockZ())
                     .append("}");
-                if (i < onlinePlayers.length - 1) json.append(",");
+                count++;
             }
             json.append("]}");
-
-            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", json.toString());
-            addCorsHeaders(res);
-            return res;
+            sendJson(exchange, json.toString());
         }
-
-        Response res = newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found");
-        addCorsHeaders(res);
-        return res;
     }
 
-    private void addCorsHeaders(Response res) {
-        res.addHeader("Access-Control-Allow-Origin", "*");
-        res.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    // --- 5. Real-Time 2D World Terrain Image Handler ---
+    private class MapImageHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            addCors(exchange);
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                try {
+                    World mainWorld = Bukkit.getWorlds().get(0);
+                    int radius = 100;
+                    int size = radius * 2;
+                    BufferedImage mapImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+
+                    for (int x = 0; x < size; x++) {
+                        for (int z = 0; z < size; z++) {
+                            int worldX = -radius + x;
+                            int worldZ = -radius + z;
+                            Block topBlock = mainWorld.getHighestBlockAt(worldX, worldZ);
+                            Color color = getBlockColor(topBlock.getType().name());
+                            mapImage.setRGB(x, z, color.getRGB());
+                        }
+                    }
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ImageIO.write(mapImage, "png", baos);
+                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+                    sendJson(exchange, "{\"image\":\"" + base64Image + "\"}");
+                } catch (Exception e) {
+                    plugin.getLogger().severe("Map Render Error: " + e.getMessage());
+                }
+            });
+        }
+    }
+
+    private Color getBlockColor(String materialName) {
+        if (materialName.contains("GRASS")) return new Color(86, 173, 76);
+        if (materialName.contains("WATER")) return new Color(52, 114, 222);
+        if (materialName.contains("SAND")) return new Color(219, 211, 160);
+        if (materialName.contains("STONE") || materialName.contains("DEEPSLATE")) return new Color(128, 128, 128);
+        if (materialName.contains("LEAVES") || materialName.contains("LOG") || materialName.contains("WOOD")) return new Color(45, 107, 34);
+        if (materialName.contains("DIRT")) return new Color(134, 96, 67);
+        if (materialName.contains("SNOW") || materialName.contains("ICE")) return new Color(240, 248, 255);
+        if (materialName.contains("LAVA")) return new Color(237, 85, 23);
+        return new Color(30, 32, 40);
+    }
+
+    private void addCors(HttpExchange exchange) {
+        exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    private void send204(HttpExchange exchange) throws IOException {
+        exchange.sendResponseHeaders(204, -1);
+    }
+
+    private void sendJson(HttpExchange exchange, String json) throws IOException {
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private String getQueryParam(String query, String key) {
+        return getQueryParam(query, key, null);
+    }
+
+    private String getQueryParam(String query, String key, String defaultValue) {
+        if (query == null) return defaultValue;
+        for (String param : query.split("&")) {
+            String[] pair = param.split("=");
+            if (pair.length > 1 && pair[0].equalsIgnoreCase(key)) return pair[1];
+        }
+        return defaultValue;
     }
 }
