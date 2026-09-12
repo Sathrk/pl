@@ -10,7 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.imageio.ImageIO;
-import java.awt.Color; // Spigot Color ki jagah AWT Color import fix kiya gaya hai
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,7 +22,7 @@ import java.util.Base64;
 public class WebDashboardPlugin extends JavaPlugin {
 
     private HttpServer httpServer;
-    private static final int PORT = 12935; // Web API Port
+    private static final int PORT = 12935;
 
     @Override
     public void onEnable() {
@@ -42,10 +42,7 @@ public class WebDashboardPlugin extends JavaPlugin {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(PORT), 0);
             
-            // Endpoint 1: Online Players Coordinates
             httpServer.createContext("/api/map", new MapDataHandler());
-            
-            // Endpoint 2: Real-time 2D World Terrain Base64 Image Render
             httpServer.createContext("/api/map-image", new MapImageHandler());
             
             httpServer.setExecutor(null);
@@ -55,7 +52,6 @@ public class WebDashboardPlugin extends JavaPlugin {
         }
     }
 
-    // --- API 1: Online Players Coordinates Handler ---
     private class MapDataHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -83,7 +79,6 @@ public class WebDashboardPlugin extends JavaPlugin {
         }
     }
 
-    // --- API 2: 2D Block Terrain Renderer Handler ---
     private class MapImageHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -93,19 +88,24 @@ public class WebDashboardPlugin extends JavaPlugin {
                 return;
             }
 
-            World mainWorld = Bukkit.getWorlds().get(0); // Primary Server World
-            int centerX = 0; // Spawn Center X
-            int centerZ = 0; // Spawn Center Z
-            int radius = 150; // Scan Area Radius (Total 300x300 Blocks)
+            Bukkit.getScheduler().runTask(WebDashboardPlugin.this, () -> {
+                try {
+                    World mainWorld = Bukkit.getWorlds().get(0);
+                    int centerX = 0;
+                    int centerZ = 0;
+                    int radius = 100;
 
-            String base64Image = renderWorldTerrainBase64(mainWorld, centerX, centerZ, radius);
+                    String base64Image = renderWorldTerrainBase64(mainWorld, centerX, centerZ, radius);
+                    String json = "{\"image\":\"" + base64Image + "\"}";
 
-            String json = "{\"image\":\"" + base64Image + "\"}";
-            sendJsonResponse(exchange, json);
+                    sendJsonResponse(exchange, json);
+                } catch (Exception e) {
+                    getLogger().severe("Map render error: " + e.getMessage());
+                }
+            });
         }
     }
 
-    // --- 2D Pixel Generator Core Engine ---
     private String renderWorldTerrainBase64(World world, int centerX, int centerZ, int radius) {
         int size = radius * 2;
         BufferedImage mapImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
@@ -131,7 +131,6 @@ public class WebDashboardPlugin extends JavaPlugin {
         }
     }
 
-    // Block Texture Color Mapping Rules
     private Color getBlockColor(String materialName) {
         if (materialName.contains("GRASS")) return new Color(86, 173, 76);
         if (materialName.contains("WATER")) return new Color(52, 114, 222);
@@ -142,7 +141,7 @@ public class WebDashboardPlugin extends JavaPlugin {
         if (materialName.contains("SNOW") || materialName.contains("ICE")) return new Color(240, 248, 255);
         if (materialName.contains("LAVA")) return new Color(237, 85, 23);
         
-        return new Color(40, 44, 52); // Default Unknown Block Dark Tint
+        return new Color(30, 32, 40);
     }
 
     private void addCorsHeaders(HttpExchange exchange) {
