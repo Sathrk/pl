@@ -54,3 +54,49 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
         return true;
     }
 }
+
+
+   @Override
+public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    if (!(sender instanceof Player)) {
+        sender.sendMessage("Is command ko sirf in-game player use kar sakta hai!");
+        return true;
+    }
+
+    Player player = (Player) sender;
+
+    if (command.getName().equalsIgnoreCase("web") && args.length > 0 && args[0].equalsIgnoreCase("login")) {
+        String code = PasscodeManager.generateCode(player.getName());
+        player.sendMessage(ChatColor.GREEN + "[WebAuth] " + ChatColor.WHITE + "Aapka Web Login Passcode: " 
+            + ChatColor.YELLOW + ChatColor.BOLD + code);
+        return true;
+    }
+
+    if (command.getName().equalsIgnoreCase("claim")) {
+        List<ClaimManager.ClaimItem> pendingClaims = ClaimManager.getClaims(player.getName());
+
+        if (pendingClaims.isEmpty()) {
+            player.sendMessage(ChatColor.RED + "[WebClaim] Aapke paas koi pending claim rewards nahi hain!");
+            return true;
+        }
+
+        // Inventory space check
+        if (player.getInventory().firstEmpty() == -1) {
+            player.sendMessage(ChatColor.RED + "[WebClaim] Aapki inventory full hai! Space khali karke dubara try karein.");
+            return true;
+        }
+
+        int claimedCount = 0;
+        for (ClaimManager.ClaimItem claim : pendingClaims) {
+            ItemStack stack = new ItemStack(claim.getMaterial(), claim.getAmount());
+            player.getInventory().addItem(stack);
+            claimedCount++;
+        }
+
+        ClaimManager.clearClaims(player.getName());
+        player.sendMessage(ChatColor.GREEN + "[WebClaim] Successfully claimed " + claimedCount + " item stack(s)!");
+        return true;
+    }
+
+    return false;
+}
