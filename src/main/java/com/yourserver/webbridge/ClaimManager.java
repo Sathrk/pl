@@ -1,7 +1,6 @@
 package com.yourserver.webbridge;
 
 import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,13 +21,11 @@ public class ClaimManager {
         public int getAmount() { return amount; }
     }
 
-    // Player Username -> List of Pending ClaimItems
     private static final Map<String, List<ClaimItem>> claimStorage = new ConcurrentHashMap<>();
 
-    // Web API se claim add karne ke liye
     public static void addClaim(String username, String materialName, int amount) {
         Material mat = Material.matchMaterial(materialName);
-        if (mat == null) mat = Material.DIRT; // Fallback material
+        if (mat == null) mat = Material.DIRT;
 
         ClaimItem item = new ClaimItem(mat, amount);
         claimStorage.computeIfAbsent(username.toLowerCase(), k -> new ArrayList<>()).add(item);
