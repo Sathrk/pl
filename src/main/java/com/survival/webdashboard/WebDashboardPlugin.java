@@ -6,6 +6,9 @@ import com.sun.net.httpserver.HttpServer;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -19,42 +22,21 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-public class WebDashboardPlugin extends JavaPlugin {
+public class WebDashboardPlugin extends JavaPlugin implements CommandExecutor {
 
     private HttpServer httpServer;
     private static final int PORT = 12935;
 
     @Override
-public void onEnable() {
-    startWebServer();
-    
-    // Command Register karein
-    if (this.getCommand("web") != null) {
-        this.getCommand("web").setExecutor(this);
-    }
-    
-    getLogger().info("WebDashboard API Plugin successfully enabled on port " + PORT);
-}
-
-@Override
-public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.command.Command command, String label, String[] args) {
-    if (command.getName().equalsIgnoreCase("web")) {
-        if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
-            if (sender instanceof Player) {
-                Player player = (Player) sender;
-                player.sendMessage("§a[WebDashboard] Login successful! Welcome " + player.getName());
-            } else {
-                sender.sendMessage("Sirf in-game players is command ko run kar sakte hain.");
-            }
-            return true;
-        }
-    }
-    return false;
-}
-
-    @Override
     public void onEnable() {
+        // HTTP Web Server Start
         startWebServer();
+
+        // Register /web Command Listener
+        if (this.getCommand("web") != null) {
+            this.getCommand("web").setExecutor(this);
+        }
+
         getLogger().info("WebDashboard API Plugin successfully enabled on port " + PORT);
     }
 
@@ -66,13 +48,29 @@ public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.com
         getLogger().info("WebDashboard API Plugin disabled.");
     }
 
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("web")) {
+            if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
+                if (sender instanceof Player) {
+                    Player player = (Player) sender;
+                    player.sendMessage("§a[WebDashboard] Login successful! Welcome " + player.getName());
+                } else {
+                    sender.sendMessage("Sirf in-game players is command ko run kar sakte hain.");
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void startWebServer() {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(PORT), 0);
-            
+
             httpServer.createContext("/api/map", new MapDataHandler());
             httpServer.createContext("/api/map-image", new MapImageHandler());
-            
+
             httpServer.setExecutor(null);
             httpServer.start();
         } catch (IOException e) {
@@ -80,6 +78,7 @@ public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.com
         }
     }
 
+    // --- API 1: Online Players Coordinates ---
     private class MapDataHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -107,6 +106,7 @@ public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.com
         }
     }
 
+    // --- API 2: Real-time 2D Terrain Base64 Renderer ---
     private class MapImageHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -116,6 +116,7 @@ public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.com
                 return;
             }
 
+            // Sync Thread execution for safely scanning Bukkit Blocks
             Bukkit.getScheduler().runTask(WebDashboardPlugin.this, () -> {
                 try {
                     World mainWorld = Bukkit.getWorlds().get(0);
@@ -168,7 +169,7 @@ public boolean onCommand(org.bukkit.command.CommandSender sender, org.bukkit.com
         if (materialName.contains("DIRT")) return new Color(134, 96, 67);
         if (materialName.contains("SNOW") || materialName.contains("ICE")) return new Color(240, 248, 255);
         if (materialName.contains("LAVA")) return new Color(237, 85, 23);
-        
+
         return new Color(30, 32, 40);
     }
 
