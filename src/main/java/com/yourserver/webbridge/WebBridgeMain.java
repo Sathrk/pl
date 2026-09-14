@@ -29,9 +29,12 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
             int port = 12935;
             server = HttpServer.create(new InetSocketAddress(port), 0);
 
+            // Register All Required Endpoints
             server.createContext("/api/map-image", new MapImageHandler(this));
             server.createContext("/api/chat", new GetChatHandler());
             server.createContext("/api/send-chat", new SendChatHandler(this));
+            server.createContext("/api/inventory", new GetInventoryHandler()); // Added inventory endpoint
+            server.createContext("/api/map", new GetMapHandler());             // Added map endpoint
 
             server.setExecutor(null);
             server.start();
