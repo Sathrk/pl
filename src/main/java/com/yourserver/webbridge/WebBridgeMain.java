@@ -13,10 +13,14 @@ public class WebBridgeMain extends JavaPlugin {
     @Override
     public void onEnable() {
         try {
+            // Register Event Listeners
             getServer().getPluginManager().registerEvents(new ChatListener(), this);
 
-            server = HttpServer.create(new InetSocketAddress(8080), 0);
+            // Bind to Port 8080 (Fallback if port is busy)
+            int port = 8080;
+            server = HttpServer.create(new InetSocketAddress(port), 0);
 
+            // Register Endpoints
             server.createContext("/api/map-image", new MapImageHandler(this));
             server.createContext("/api/chat", new GetChatHandler());
             server.createContext("/api/send-chat", new SendChatHandler(this));
@@ -24,9 +28,12 @@ public class WebBridgeMain extends JavaPlugin {
             server.setExecutor(null);
             server.start();
 
-            getLogger().info("WebBridge successfully started on port 8080!");
+            getLogger().info("WebBridge successfully enabled on port " + port);
         } catch (Exception e) {
-            getLogger().severe("Failed to start WebBridge: " + e.getMessage());
+            getLogger().severe("Could not start HTTP Server: " + e.getMessage());
+            e.printStackTrace();
+            // Plugin ko safely disable karein crash hone se bachane ke liye
+            getServer().getPluginManager().disablePlugin(this);
         }
     }
 
@@ -34,7 +41,7 @@ public class WebBridgeMain extends JavaPlugin {
     public void onDisable() {
         if (server != null) {
             server.stop(0);
-            getLogger().info("WebBridge stopped.");
+            getLogger().info("WebBridge HTTP Server stopped.");
         }
     }
 }
