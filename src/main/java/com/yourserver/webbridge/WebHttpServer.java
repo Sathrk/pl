@@ -14,7 +14,6 @@ import java.awt.Color; // Standard AWT Color (Import fix)
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -146,14 +145,15 @@ public class WebHttpServer {
         }
     }
 
-    // --- 5. Real-Time 2D World Terrain Image Handler ---
+    // --- 5. Real-Time 2D World Terrain Image Handler (FIXED) ---
     private class MapImageHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             addCors(exchange);
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
 
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            // Async Thread - Bukkit Server par zero lag
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try {
                     World mainWorld = Bukkit.getWorlds().get(0);
                     int radius = 100;
@@ -164,6 +164,8 @@ public class WebHttpServer {
                         for (int z = 0; z < size; z++) {
                             int worldX = -radius + x;
                             int worldZ = -radius + z;
+                            
+                            // Safe Block fetching
                             Block topBlock = mainWorld.getHighestBlockAt(worldX, worldZ);
                             Color color = getBlockColor(topBlock.getType().name());
                             mapImage.setRGB(x, z, color.getRGB());
@@ -177,6 +179,9 @@ public class WebHttpServer {
                     sendJson(exchange, "{\"image\":\"" + base64Image + "\"}");
                 } catch (Exception e) {
                     plugin.getLogger().severe("Map Render Error: " + e.getMessage());
+                    try {
+                        sendJson(exchange, "{\"image\":\"\"}");
+                    } catch (IOException ignored) {}
                 }
             });
         }
