@@ -145,7 +145,7 @@ public class WebHttpServer {
         }
     }
 
-    // --- 5. Real-Time 2D World Terrain Image Handler (FIXED & Dynamic Coordinates) ---
+    // --- 5. Aspect Ratio Corrected Terrain Image Handler ---
     private class MapImageHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -155,21 +155,22 @@ public class WebHttpServer {
             String query = exchange.getRequestURI().getQuery();
             int centerX = Integer.parseInt(getQueryParam(query, "x", "0"));
             int centerZ = Integer.parseInt(getQueryParam(query, "z", "0"));
+            int radius = Integer.parseInt(getQueryParam(query, "radius", "100")); // Zoom level
 
-            // Async Thread - Bukkit Server par zero lag
+            // Canvas Aspect Ratio Match (1150x300 = ~3.83 Ratio)
+            int width = radius * 2;
+            int height = (int) (width / (1150.0 / 300.0));
+
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try {
                     World mainWorld = Bukkit.getWorlds().get(0);
-                    int radius = 100; // View distance radius
-                    int size = radius * 2;
-                    BufferedImage mapImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+                    BufferedImage mapImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
-                    for (int x = 0; x < size; x++) {
-                        for (int z = 0; z < size; z++) {
-                            int worldX = centerX - radius + x;
-                            int worldZ = centerZ - radius + z;
+                    for (int x = 0; x < width; x++) {
+                        for (int z = 0; z < height; z++) {
+                            int worldX = centerX - (width / 2) + x;
+                            int worldZ = centerZ - (height / 2) + z;
                             
-                            // Safe Block fetching
                             Block topBlock = mainWorld.getHighestBlockAt(worldX, worldZ);
                             Color color = getBlockColor(topBlock.getType().name());
                             mapImage.setRGB(x, z, color.getRGB());
