@@ -21,8 +21,13 @@ public class GetMapHandler implements HttpHandler {
         List<String> playerList = new ArrayList<>();
         for (Player p : Bukkit.getOnlinePlayers()) {
             playerList.add(String.format(
-                "{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}",
-                p.getName(), p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()
+                "{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f,\"yaw\":%.2f,\"world\":\"%s\"}",
+                p.getName(),
+                p.getLocation().getX(),
+                p.getLocation().getY(),
+                p.getLocation().getZ(),
+                p.getLocation().getYaw(),
+                p.getWorld().getName()
             ));
         }
 
