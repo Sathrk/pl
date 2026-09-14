@@ -1,4 +1,4 @@
-package com.yourpackage.webserver.handler;
+package com.yourserver.webbridge.handler;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
