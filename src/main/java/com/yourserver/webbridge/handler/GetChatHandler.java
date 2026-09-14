@@ -1,8 +1,8 @@
-package com.yourpackage.webserver.handler;
+package com.yourserver.webbridge.handler;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import com.yourpackage.webserver.manager.ChatManager;
+import com.yourserver.webbridge.manager.ChatManager;
 
 import java.io.IOException;
 
