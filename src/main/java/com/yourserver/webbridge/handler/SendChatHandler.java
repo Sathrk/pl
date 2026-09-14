@@ -2,12 +2,11 @@ package com.yourserver.webbridge.handler;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.yourserver.webbridge.manager.ChatManager;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 
 public class SendChatHandler implements HttpHandler {
     private final JavaPlugin plugin;
@@ -25,16 +24,22 @@ public class SendChatHandler implements HttpHandler {
         }
 
         String query = exchange.getRequestURI().getQuery();
-        String user = URLDecoder.decode(CorsHelper.getQueryParam(query, "username", "WebUser"), StandardCharsets.UTF_8);
-        String msg = URLDecoder.decode(CorsHelper.getQueryParam(query, "message", ""), StandardCharsets.UTF_8);
+        String username = CorsHelper.getQueryParam(query, "username", "WebUser");
+        String message = CorsHelper.getQueryParam(query, "message", "");
 
-        if (!msg.isEmpty()) {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                Bukkit.broadcastMessage("§8[§bWeb§8] §f" + user + ": " + msg);
-            });
-            CorsHelper.sendJson(exchange, "{\"success\":true}");
-        } else {
-            CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Empty message\"}");
+        if (message.isEmpty()) {
+            CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Message cannot be empty\"}");
+            return;
         }
+
+        // 1. Add to WebBridge Chat Manager Memory (So it appears on Web UI)
+        ChatManager.addMessage("[Web] " + username, message);
+
+        // 2. Broadcast inside Minecraft Server (Main Thread)
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Bukkit.broadcastMessage("§b[Web] §f" + username + ": §7" + message);
+        });
+
+        CorsHelper.sendJson(exchange, "{\"success\":true}");
     }
 }
