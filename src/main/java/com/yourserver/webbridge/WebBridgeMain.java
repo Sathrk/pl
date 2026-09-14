@@ -6,6 +6,7 @@ import com.yourserver.webbridge.listener.ChatListener;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.InetSocketAddress;
@@ -33,6 +34,7 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
             server.createContext("/api/send-chat", new SendChatHandler(this));
             server.createContext("/api/inventory", new GetInventoryHandler());
             server.createContext("/api/map", new GetMapHandler());
+            server.createContext("/api/login", new AuthHandler());
 
             server.setExecutor(null);
             server.start();
@@ -46,9 +48,21 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("web")) {
-            sender.sendMessage("§a[WebBridge] Use the web dashboard interface to interact.");
+            if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage("§cThis command can only be used in-game.");
+                    return true;
+                }
+                Player player = (Player) sender;
+                String code = AuthHandler.generateCode(player.getName());
+                player.sendMessage("§a[WebBridge] Your login code is: §e" + code);
+                player.sendMessage("§7Enter this code on the web dashboard to log in.");
+                return true;
+            }
+            sender.sendMessage("§a[WebBridge] Usage: /web login");
             return true;
         }
+
         if (command.getName().equalsIgnoreCase("claim")) {
             sender.sendMessage("§a[WebBridge] No store claims pending.");
             return true;
