@@ -1,75 +1,40 @@
-package com.survival.webdashboard;
+package com.yourserver.webbridge;
 
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
+import com.sun.net.httpserver.HttpServer;
+import com.yourserver.webbridge.handler.*;
+import com.yourserver.webbridge.listener.ChatListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
+import java.net.InetSocketAddress;
 
-    private PasscodeManager passcodeManager;
-    private ClaimManager claimManager;
-    private WebHttpServer httpServer;
+public class WebBridgeMain extends JavaPlugin {
+    private HttpServer server;
 
     @Override
     public void onEnable() {
-        this.passcodeManager = new PasscodeManager();
-        this.claimManager = new ClaimManager();
+        try {
+            getServer().getPluginManager().registerEvents(new ChatListener(), this);
 
-        // Start HTTP API Server
-        this.httpServer = new WebHttpServer(this);
-        this.httpServer.start();
+            server = HttpServer.create(new InetSocketAddress(8080), 0);
 
-        // Register Commands
-        if (this.getCommand("web") != null) this.getCommand("web").setExecutor(this);
-        if (this.getCommand("claim") != null) this.getCommand("claim").setExecutor(this);
+            server.createContext("/api/map-image", new MapImageHandler(this));
+            server.createContext("/api/chat", new GetChatHandler());
+            server.createContext("/api/send-chat", new SendChatHandler(this));
 
-        getLogger().info("WebBridge Main Plugin successfully loaded!");
+            server.setExecutor(null);
+            server.start();
+
+            getLogger().info("WebBridge successfully started on port 8080!");
+        } catch (Exception e) {
+            getLogger().severe("Failed to start WebBridge: " + e.getMessage());
+        }
     }
 
     @Override
     public void onDisable() {
-        if (httpServer != null) {
-            httpServer.stop();
+        if (server != null) {
+            server.stop(0);
+            getLogger().info("WebBridge stopped.");
         }
-        getLogger().info("WebBridge Plugin disabled.");
     }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage("Sirf in-game players in commands ko execute kar sakte hain.");
-            return true;
-        }
-
-        Player player = (Player) sender;
-
-        if (command.getName().equalsIgnoreCase("web")) {
-            if (args.length > 0 && args[0].equalsIgnoreCase("login")) {
-                String code = passcodeManager.generatePasscode(player.getName());
-                player.sendMessage("§a[WebBridge] Your web login passcode is: §e§l" + code);
-                player.sendMessage("§7Enter this 6-digit passcode on the web dashboard to authenticate.");
-                return true;
-            } else {
-                player.sendMessage("§cUsage: /web login");
-                return true;
-            }
-        }
-
-        if (command.getName().equalsIgnoreCase("claim")) {
-            boolean success = claimManager.processClaims(player);
-            if (success) {
-                player.sendMessage("§a[WebBridge] Items claimed successfully!");
-            } else {
-                player.sendMessage("§e[WebBridge] You have no pending web store claims.");
-            }
-            return true;
-        }
-
-        return false;
-    }
-
-    public PasscodeManager getPasscodeManager() { return passcodeManager; }
-    public ClaimManager getClaimManager() { return claimManager; }
 }
