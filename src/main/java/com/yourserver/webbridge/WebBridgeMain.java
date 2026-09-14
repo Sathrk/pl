@@ -15,24 +15,18 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
 
     @Override
     public void onEnable() {
-        // Register Event Listeners
         try {
             getServer().getPluginManager().registerEvents(new ChatListener(), this);
         } catch (Exception e) {
             getLogger().warning("ChatListener registration warning: " + e.getMessage());
         }
 
-        // Register Command Executors declared in plugin.yml
-        if (getCommand("web") != null) {
-            getCommand("web").setExecutor(this);
-        }
-        if (getCommand("claim") != null) {
-            getCommand("claim").setExecutor(this);
-        }
+        if (getCommand("web") != null) getCommand("web").setExecutor(this);
+        if (getCommand("claim") != null) getCommand("claim").setExecutor(this);
 
-        // Start HTTP Server
+        // Assigned Secondary Port
         try {
-            int port = 8080;
+            int port = 12935;
             server = HttpServer.create(new InetSocketAddress(port), 0);
 
             server.createContext("/api/map-image", new MapImageHandler(this));
@@ -42,10 +36,9 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
             server.setExecutor(null);
             server.start();
 
-            getLogger().info("WebBridge HTTP Server started on port " + port);
+            getLogger().info("WebBridge HTTP Server started successfully on port " + port);
         } catch (Exception e) {
-            getLogger().severe("Failed to start HTTP Server on port 8080: " + e.getMessage());
-            getLogger().severe("Check if port 8080 is already used by another application.");
+            getLogger().severe("Failed to start HTTP Server on port 12935: " + e.getMessage());
         }
     }
 
