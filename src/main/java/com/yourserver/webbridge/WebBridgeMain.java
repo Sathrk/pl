@@ -3,13 +3,16 @@ package com.yourserver.webbridge;
 import com.sun.net.httpserver.HttpServer;
 import com.yourserver.webbridge.handler.*;
 import com.yourserver.webbridge.listener.ChatListener;
+import com.yourserver.webbridge.manager.ClaimManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.InetSocketAddress;
+import java.util.List;
 
 public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
     private HttpServer server;
@@ -35,6 +38,7 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
             server.createContext("/api/inventory", new GetInventoryHandler());
             server.createContext("/api/map", new GetMapHandler());
             server.createContext("/api/login", new AuthHandler());
+            server.createContext("/api/store-claim", new ClaimHandler()); // <--- Store Claim Endpoint
 
             server.setExecutor(null);
             server.start();
@@ -64,7 +68,23 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
         }
 
         if (command.getName().equalsIgnoreCase("claim")) {
-            sender.sendMessage("§a[WebBridge] No store claims pending.");
+            if (!(sender instanceof Player)) {
+                sender.sendMessage("§cOnly players can claim items.");
+                return true;
+            }
+
+            Player player = (Player) sender;
+            if (!ClaimManager.hasClaims(player.getName())) {
+                player.sendMessage("§c[WebBridge] You have no pending store claims!");
+                return true;
+            }
+
+            List<ItemStack> items = ClaimManager.getAndClearClaims(player.getName());
+            for (ItemStack item : items) {
+                player.getInventory().addItem(item);
+            }
+
+            player.sendMessage("§a[WebBridge] Successfully claimed " + items.size() + " reward package(s)!");
             return true;
         }
         return false;
