@@ -1,7 +1,6 @@
-package com.yourpackage.webserver.manager;
+package com.yourserver.webbridge.manager;
 
 import java.util.LinkedList;
-import java.util.List;
 
 public class ChatManager {
     private static final LinkedList<String> chatLogs = new LinkedList<>();
