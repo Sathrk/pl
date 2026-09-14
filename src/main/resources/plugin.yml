@@ -7,7 +7,7 @@ description: Minecraft Web Dashboard API, Authentication & 2D Map Plugin
 commands:
   web:
     description: Web dashboard command
-    usage: /web login
+    usage: /web
   claim:
     description: Claim items sent from web store
     usage: /claim
