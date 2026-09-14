@@ -145,25 +145,29 @@ public class WebHttpServer {
         }
     }
 
-    // --- 5. Real-Time 2D World Terrain Image Handler (FIXED) ---
+    // --- 5. Real-Time 2D World Terrain Image Handler (FIXED & Dynamic Coordinates) ---
     private class MapImageHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             addCors(exchange);
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) { send204(exchange); return; }
 
+            String query = exchange.getRequestURI().getQuery();
+            int centerX = Integer.parseInt(getQueryParam(query, "x", "0"));
+            int centerZ = Integer.parseInt(getQueryParam(query, "z", "0"));
+
             // Async Thread - Bukkit Server par zero lag
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try {
                     World mainWorld = Bukkit.getWorlds().get(0);
-                    int radius = 100;
+                    int radius = 100; // View distance radius
                     int size = radius * 2;
                     BufferedImage mapImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
 
                     for (int x = 0; x < size; x++) {
                         for (int z = 0; z < size; z++) {
-                            int worldX = -radius + x;
-                            int worldZ = -radius + z;
+                            int worldX = centerX - radius + x;
+                            int worldZ = centerZ - radius + z;
                             
                             // Safe Block fetching
                             Block topBlock = mainWorld.getHighestBlockAt(worldX, worldZ);
