@@ -1,14 +1,14 @@
-package com.yourpackage.webserver.handler;
+package com.yourserver.webbridge.handler;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.bukkit.Bukkit;
-import org.bukkit.Color;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.imageio.ImageIO;
+import java.awt.Color; // <--- Yeh Bukkit Color ko replace karega
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
