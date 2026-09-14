@@ -1,6 +1,6 @@
-package com.yourpackage.webserver.listener;
+package com.yourserver.webbridge.listener;
 
-import com.yourpackage.webserver.manager.ChatManager;
+import com.yourserver.webbridge.manager.ChatManager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
