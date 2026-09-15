@@ -1,7 +1,8 @@
 name: WebBridge
-version: 1.0.0
+version: 1.0
 main: com.yourserver.webbridge.WebBridgeMain
 api-version: 1.20
+softdepend: [EconomyShopGUI]
 description: Minecraft Web Dashboard API, Authentication & 2D Map Plugin
 
 commands:
