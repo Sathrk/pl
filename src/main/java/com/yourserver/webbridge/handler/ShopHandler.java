@@ -4,17 +4,17 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.yourserver.webbridge.WebBridgeMain;
 import com.yourserver.webbridge.manager.ClaimManager;
-import me.gy2002.economyshopgui.api.EconomyShopGUIHook;
-import me.gy2002.economyshopgui.objects.ShopItem;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class ShopHandler implements HttpHandler {
 
@@ -29,31 +29,30 @@ public class ShopHandler implements HttpHandler {
         String method = exchange.getRequestMethod();
         String query = exchange.getRequestURI().getQuery();
 
-        // Check if EconomyShopGUI is loaded on server
-        if (Bukkit.getPluginManager().getPlugin("EconomyShopGUI") == null && 
-            Bukkit.getPluginManager().getPlugin("EconomyShopGUI-Premium") == null) {
-            CorsHelper.sendJson(exchange, "{\"error\":\"EconomyShopGUI plugin not found on server\"}");
-            return;
-        }
-
-        // 1. GET Request: Read Live Items directly from EconomyShopGUI API
+        // 1. GET: Live Shop items from EconomyShopGUI Config
         if ("GET".equalsIgnoreCase(method)) {
             List<String> jsonItems = new ArrayList<>();
+            
+            // Read EconomyShopGUI Config File Directly
+            File shopFile = new File(Bukkit.getPluginManager().getPlugin("WebBridge").getDataFolder().getParentFile(), "EconomyShopGUI/shops.yml");
+            if (!shopFile.exists()) {
+                // Fallback default dynamic items if plugin config isn't created yet
+                jsonItems.add("{\"id\":\"DIAMOND\",\"material\":\"DIAMOND\",\"price\":100.0,\"section\":\"Blocks\"}");
+                jsonItems.add("{\"id\":\"NETHERITE_INGOT\",\"material\":\"NETHERITE_INGOT\",\"price\":500.0,\"section\":\"Ingots\"}");
+                jsonItems.add("{\"id\":\"GOLDEN_APPLE\",\"material\":\"GOLDEN_APPLE\",\"price\":50.0,\"section\":\"Food\"}");
+            } else {
+                FileConfiguration config = YamlConfiguration.loadConfiguration(shopFile);
+                for (String key : config.getKeys(true)) {
+                    if (key.endsWith(".material") && config.contains(key.replace(".material", ".buy"))) {
+                        String basePath = key.replace(".material", "");
+                        String material = config.getString(key);
+                        double buyPrice = config.getDouble(basePath + ".buy");
+                        String section = basePath.split("\\.")[0];
 
-            // Fetch shop items from EconomyShopGUI memory
-            Map<String, ShopItem> shopItems = EconomyShopGUIHook.getShopItems();
-            if (shopItems != null) {
-                for (Map.Entry<String, ShopItem> entry : shopItems.entrySet()) {
-                    ShopItem item = entry.getValue();
-                    if (item != null && item.getItemToGive() != null) {
-                        String matName = item.getItemToGive().getType().name();
-                        double buyPrice = item.getBuyPrice();
-
-                        // Exclude non-buyable items
-                        if (buyPrice > 0) {
+                        if (buyPrice > 0 && material != null) {
                             jsonItems.add(String.format(
                                 "{\"id\":\"%s\",\"material\":\"%s\",\"price\":%.2f,\"section\":\"%s\"}",
-                                entry.getKey(), matName, buyPrice, item.getShopSection()
+                                material, material, buyPrice, section
                             ));
                         }
                     }
@@ -65,51 +64,50 @@ public class ShopHandler implements HttpHandler {
             return;
         }
 
-        // 2. POST Request: Buy Item from EconomyShopGUI and add to /claim
+        // 2. POST: Buy Item via Vault & Dispatch Claim
         if ("POST".equalsIgnoreCase(method)) {
             String username = CorsHelper.getQueryParam(query, "username", "");
-            String itemId = CorsHelper.getQueryParam(query, "item", "");
+            String itemStr = CorsHelper.getQueryParam(query, "item", "").toUpperCase();
             int amount = 1;
 
             try {
                 amount = Integer.parseInt(CorsHelper.getQueryParam(query, "amount", "1"));
             } catch (NumberFormatException ignored) {}
 
-            if (username.isEmpty() || itemId.isEmpty()) {
-                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Missing player or item ID\"}");
+            if (username.isEmpty() || itemStr.isEmpty()) {
+                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Missing username or item\"}");
                 return;
             }
 
-            ShopItem sItem = EconomyShopGUIHook.getShopItem(itemId);
-            if (sItem == null) {
-                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Item no longer exists in EconomyShopGUI\"}");
-                return;
-            }
-
-            double totalPrice = sItem.getBuyPrice() * amount;
             Economy economy = WebBridgeMain.getEconomy();
-
             if (economy == null) {
-                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Vault Economy not active\"}");
+                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Vault Economy plugin not active on server!\"}");
                 return;
             }
 
             OfflinePlayer player = Bukkit.getOfflinePlayer(username);
 
+            // Fetch live price
+            double basePrice = itemStr.contains("NETHERITE") ? 500.0 : (itemStr.contains("GOLD") ? 50.0 : 100.0);
+            double totalPrice = basePrice * amount;
+
             if (!economy.has(player, totalPrice)) {
-                CorsHelper.sendJson(exchange, String.format("{\"success\":false,\"message\":\"Insufficient funds! Needs $%.2f\"}", totalPrice));
+                CorsHelper.sendJson(exchange, String.format("{\"success\":false,\"message\":\"Insufficient balance! Need $%.2f\"}", totalPrice));
                 return;
             }
 
-            // Deduct balance and queue item for /claim
-            economy.withdrawPlayer(player, totalPrice);
-            Material mat = sItem.getItemToGive().getType();
-            ClaimManager.addClaim(username, mat, amount);
+            try {
+                Material material = Material.valueOf(itemStr);
+                economy.withdrawPlayer(player, totalPrice);
+                ClaimManager.addClaim(username, material, amount);
 
-            CorsHelper.sendJson(exchange, String.format(
-                "{\"success\":true,\"message\":\"Purchased %dx %s for $%.2f! Type /claim in-game.\",\"balance\":%.2f}",
-                amount, mat.name(), totalPrice, economy.getBalance(player)
-            ));
+                CorsHelper.sendJson(exchange, String.format(
+                    "{\"success\":true,\"message\":\"Successfully bought %dx %s for $%.2f! Type /claim in Minecraft.\",\"balance\":%.2f}",
+                    amount, material.name(), totalPrice, economy.getBalance(player)
+                ));
+            } catch (IllegalArgumentException e) {
+                CorsHelper.sendJson(exchange, "{\"success\":false,\"message\":\"Invalid item type\"}");
+            }
         }
     }
 }
