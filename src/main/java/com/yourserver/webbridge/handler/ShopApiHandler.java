@@ -1,16 +1,17 @@
 package com.webbridge.api;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class ShopApiHandler implements HttpHandler {
 
@@ -22,20 +23,18 @@ public class ShopApiHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        // Enable CORS for Dashboard
         exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
         exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=UTF-8");
 
         if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
             exchange.sendResponseHeaders(200, -1);
             return;
         }
 
-        JSONObject responseJson = new JSONObject();
-        JSONArray itemsArray = new JSONArray();
+        JsonObject responseJson = new JsonObject();
+        JsonArray itemsArray = new JsonArray();
 
-        // Path to EconomyShopGUI sections folder
         File ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/sections");
 
         if (ecoShopFolder.exists() && ecoShopFolder.isDirectory()) {
@@ -46,35 +45,32 @@ public class ShopApiHandler implements HttpHandler {
                     String categoryName = file.getName().replace(".yml", "").toUpperCase();
                     YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
 
-                    // Scan all items inside this category section
                     for (String key : config.getKeys(false)) {
                         ConfigurationSection itemSec = config.getConfigurationSection(key);
                         if (itemSec != null) {
                             String material = itemSec.getString("material", key).toUpperCase();
                             double buyPrice = itemSec.getDouble("buy", 0.0);
 
-                            // Only show items that are purchasable (price > 0)
                             if (buyPrice > 0) {
-                                JSONObject itemObj = new JSONObject();
-                                itemObj.put("id", key);
-                                itemObj.put("material", material);
-                                itemObj.put("price", buyPrice);
-                                itemObj.put("section", categoryName);
-                                itemsArray.put(itemObj);
+                                JsonObject itemObj = new JsonObject();
+                                itemObj.addProperty("id", key);
+                                itemObj.addProperty("material", material);
+                                itemObj.addProperty("price", buyPrice);
+                                itemObj.addProperty("section", categoryName);
+                                itemsArray.add(itemObj);
                             }
                         }
                     }
                 }
             }
-            responseJson.put("success", true);
-            responseJson.put("items", itemsArray);
+            responseJson.addProperty("success", true);
+            responseJson.add("items", itemsArray);
         } else {
-            // Fallback response if EconomyShopGUI folder is not found
-            responseJson.put("success", false);
-            responseJson.put("message", "EconomyShopGUI folder not found at plugins/EconomyShopGUI/sections/");
+            responseJson.addProperty("success", false);
+            responseJson.addProperty("message", "EconomyShopGUI folder not found!");
         }
 
-        byte[] responseBytes = responseJson.toString().getBytes("UTF-8");
+        byte[] responseBytes = responseJson.toString().getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(200, responseBytes.length);
         OutputStream os = exchange.getResponseBody();
         os.write(responseBytes);
