@@ -1,4 +1,4 @@
-package com.webbridge.api;
+package com.yourserver.webbridge.handler;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -35,6 +35,7 @@ public class ShopApiHandler implements HttpHandler {
         JsonObject responseJson = new JsonObject();
         JsonArray itemsArray = new JsonArray();
 
+        // EconomyShopGUI ke sections folder ka path
         File ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/sections");
 
         if (ecoShopFolder.exists() && ecoShopFolder.isDirectory()) {
