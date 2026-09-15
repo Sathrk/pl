@@ -35,8 +35,11 @@ public class ShopApiHandler implements HttpHandler {
         JsonObject responseJson = new JsonObject();
         JsonArray itemsArray = new JsonArray();
 
-        // EconomyShopGUI ke sections folder ka path
+        // EconomyShopGUI main folder & sections folder
         File ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/sections");
+        if (!ecoShopFolder.exists() || !ecoShopFolder.isDirectory()) {
+            ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/shops");
+        }
 
         if (ecoShopFolder.exists() && ecoShopFolder.isDirectory()) {
             File[] sectionFiles = ecoShopFolder.listFiles((dir, name) -> name.endsWith(".yml"));
@@ -46,29 +49,15 @@ public class ShopApiHandler implements HttpHandler {
                     String categoryName = file.getName().replace(".yml", "").toUpperCase();
                     YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
 
-                    for (String key : config.getKeys(false)) {
-                        ConfigurationSection itemSec = config.getConfigurationSection(key);
-                        if (itemSec != null) {
-                            String material = itemSec.getString("material", key).toUpperCase();
-                            double buyPrice = itemSec.getDouble("buy", 0.0);
-
-                            if (buyPrice > 0) {
-                                JsonObject itemObj = new JsonObject();
-                                itemObj.addProperty("id", key);
-                                itemObj.addProperty("material", material);
-                                itemObj.addProperty("price", buyPrice);
-                                itemObj.addProperty("section", categoryName);
-                                itemsArray.add(itemObj);
-                            }
-                        }
-                    }
+                    // Scan sections recursively
+                    parseConfigSection(config, categoryName, itemsArray);
                 }
             }
             responseJson.addProperty("success", true);
             responseJson.add("items", itemsArray);
         } else {
             responseJson.addProperty("success", false);
-            responseJson.addProperty("message", "EconomyShopGUI folder not found!");
+            responseJson.addProperty("message", "EconomyShopGUI sections/shops folder not found!");
         }
 
         byte[] responseBytes = responseJson.toString().getBytes(StandardCharsets.UTF_8);
@@ -76,5 +65,40 @@ public class ShopApiHandler implements HttpHandler {
         OutputStream os = exchange.getResponseBody();
         os.write(responseBytes);
         os.close();
+    }
+
+    private void parseConfigSection(ConfigurationSection section, String categoryName, JsonArray itemsArray) {
+        for (String key : section.getKeys(false)) {
+            if (section.isConfigurationSection(key)) {
+                ConfigurationSection itemSec = section.getConfigurationSection(key);
+                if (itemSec == null) continue;
+
+                // Extract price (handles "buy", "buy-price", "price")
+                double buyPrice = 0.0;
+                if (itemSec.contains("buy")) {
+                    buyPrice = itemSec.getDouble("buy");
+                } else if (itemSec.contains("buy-price")) {
+                    buyPrice = itemSec.getDouble("buy-price");
+                } else if (itemSec.contains("price")) {
+                    buyPrice = itemSec.getDouble("price");
+                }
+
+                // Extract material/item type
+                String material = itemSec.getString("material", itemSec.getString("item", key)).toUpperCase();
+
+                // If valid item entry found
+                if (buyPrice >= 0 && (itemSec.contains("material") || itemSec.contains("item") || itemSec.contains("buy"))) {
+                    JsonObject itemObj = new JsonObject();
+                    itemObj.addProperty("id", key);
+                    itemObj.addProperty("material", material);
+                    itemObj.addProperty("price", buyPrice);
+                    itemObj.addProperty("section", categoryName);
+                    itemsArray.add(itemObj);
+                } else {
+                    // Recurse into nested sub-sections if any
+                    parseConfigSection(itemSec, categoryName, itemsArray);
+                }
+            }
+        }
     }
 }
