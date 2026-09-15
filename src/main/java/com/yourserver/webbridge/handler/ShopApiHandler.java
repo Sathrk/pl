@@ -4,11 +4,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
+import me.gyantom.economyshopgui.api.EconomyShopGUIHook;
+import me.gyantom.economyshopgui.objects.ShopItem;
+import me.gyantom.economyshopgui.util.ShopCategory;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -35,29 +36,39 @@ public class ShopApiHandler implements HttpHandler {
         JsonObject responseJson = new JsonObject();
         JsonArray itemsArray = new JsonArray();
 
-        // EconomyShopGUI main folder & sections folder
-        File ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/sections");
-        if (!ecoShopFolder.exists() || !ecoShopFolder.isDirectory()) {
-            ecoShopFolder = new File(plugin.getDataFolder().getParentFile(), "EconomyShopGUI/shops");
-        }
+        // Check if EconomyShopGUI plugin is loaded on server
+        if (Bukkit.getPluginManager().isPluginEnabled("EconomyShopGUI")) {
+            try {
+                // Loop through all active shop categories in server memory
+                for (ShopCategory category : EconomyShopGUIHook.getShopCategories()) {
+                    String categoryName = category.getCategoryName().toUpperCase();
 
-        if (ecoShopFolder.exists() && ecoShopFolder.isDirectory()) {
-            File[] sectionFiles = ecoShopFolder.listFiles((dir, name) -> name.endsWith(".yml"));
+                    // Get all items in this specific category
+                    for (ShopItem item : EconomyShopGUIHook.getShopItems(category)) {
+                        if (item != null) {
+                            String material = item.getItemToGive().getType().name();
+                            double buyPrice = item.getBuyPrice();
 
-            if (sectionFiles != null) {
-                for (File file : sectionFiles) {
-                    String categoryName = file.getName().replace(".yml", "").toUpperCase();
-                    YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-
-                    // Scan sections recursively
-                    parseConfigSection(config, categoryName, itemsArray);
+                            JsonObject itemObj = new JsonObject();
+                            itemObj.addProperty("id", item.getItemName());
+                            itemObj.addProperty("material", material);
+                            itemObj.addProperty("price", buyPrice);
+                            itemObj.addProperty("section", categoryName);
+                            
+                            itemsArray.add(itemObj);
+                        }
+                    }
                 }
+
+                responseJson.addProperty("success", true);
+                responseJson.add("items", itemsArray);
+            } catch (Exception e) {
+                responseJson.addProperty("success", false);
+                responseJson.addProperty("message", "Error fetching EconomyShopGUI API data: " + e.getMessage());
             }
-            responseJson.addProperty("success", true);
-            responseJson.add("items", itemsArray);
         } else {
             responseJson.addProperty("success", false);
-            responseJson.addProperty("message", "EconomyShopGUI sections/shops folder not found!");
+            responseJson.addProperty("message", "EconomyShopGUI plugin is not enabled on server!");
         }
 
         byte[] responseBytes = responseJson.toString().getBytes(StandardCharsets.UTF_8);
@@ -65,40 +76,5 @@ public class ShopApiHandler implements HttpHandler {
         OutputStream os = exchange.getResponseBody();
         os.write(responseBytes);
         os.close();
-    }
-
-    private void parseConfigSection(ConfigurationSection section, String categoryName, JsonArray itemsArray) {
-        for (String key : section.getKeys(false)) {
-            if (section.isConfigurationSection(key)) {
-                ConfigurationSection itemSec = section.getConfigurationSection(key);
-                if (itemSec == null) continue;
-
-                // Extract price (handles "buy", "buy-price", "price")
-                double buyPrice = 0.0;
-                if (itemSec.contains("buy")) {
-                    buyPrice = itemSec.getDouble("buy");
-                } else if (itemSec.contains("buy-price")) {
-                    buyPrice = itemSec.getDouble("buy-price");
-                } else if (itemSec.contains("price")) {
-                    buyPrice = itemSec.getDouble("price");
-                }
-
-                // Extract material/item type
-                String material = itemSec.getString("material", itemSec.getString("item", key)).toUpperCase();
-
-                // If valid item entry found
-                if (buyPrice >= 0 && (itemSec.contains("material") || itemSec.contains("item") || itemSec.contains("buy"))) {
-                    JsonObject itemObj = new JsonObject();
-                    itemObj.addProperty("id", key);
-                    itemObj.addProperty("material", material);
-                    itemObj.addProperty("price", buyPrice);
-                    itemObj.addProperty("section", categoryName);
-                    itemsArray.add(itemObj);
-                } else {
-                    // Recurse into nested sub-sections if any
-                    parseConfigSection(itemSec, categoryName, itemsArray);
-                }
-            }
-        }
     }
 }
