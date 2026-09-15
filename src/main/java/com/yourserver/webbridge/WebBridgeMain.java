@@ -4,11 +4,13 @@ import com.sun.net.httpserver.HttpServer;
 import com.yourserver.webbridge.handler.*;
 import com.yourserver.webbridge.listener.ChatListener;
 import com.yourserver.webbridge.manager.ClaimManager;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.InetSocketAddress;
@@ -16,9 +18,15 @@ import java.util.List;
 
 public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
     private HttpServer server;
+    private static Economy econ = null;
 
     @Override
     public void onEnable() {
+        // Vault Economy Integration Hook
+        if (!setupEconomy()) {
+            getLogger().warning("Vault/Economy plugin not found! Shop economy features will be disabled.");
+        }
+
         try {
             getServer().getPluginManager().registerEvents(new ChatListener(), this);
         } catch (Exception e) {
@@ -38,7 +46,8 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
             server.createContext("/api/inventory", new GetInventoryHandler());
             server.createContext("/api/map", new GetMapHandler());
             server.createContext("/api/login", new AuthHandler());
-            server.createContext("/api/store-claim", new ClaimHandler()); // <--- Store Claim Endpoint
+            server.createContext("/api/store-claim", new ClaimHandler());
+            server.createContext("/api/shop", new ShopHandler()); // <--- Registered Web Shop Endpoint
 
             server.setExecutor(null);
             server.start();
@@ -47,6 +56,22 @@ public class WebBridgeMain extends JavaPlugin implements CommandExecutor {
         } catch (Exception e) {
             getLogger().severe("Failed to start HTTP Server on port 12935: " + e.getMessage());
         }
+    }
+
+    private boolean setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return false;
+        }
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        if (rsp == null) {
+            return false;
+        }
+        econ = rsp.getProvider();
+        return econ != null;
+    }
+
+    public static Economy getEconomy() {
+        return econ;
     }
 
     @Override
